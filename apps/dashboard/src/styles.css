@@ -1,0 +1,60 @@
+/* Vintage industrial palette + typography vibes */
+:root {
+  --pv-bg: #0f0f10;
+  --pv-iron: #1c1c1e;
+  --pv-text: #e6e0d6;
+  --pv-amber: #c07a2c;
+  --pv-copper: #7a5230;
+  --pv-green: #3b7a57;
+  --pv-red: #b24c3b;
+}
+
+* { box-sizing: border-box; }
+
+.pv-root { min-height: 100vh; display: flex; flex-direction: column; }
+
+.pv-header {
+  padding: 24px 28px 8px;
+  border-bottom: 2px solid var(--pv-copper);
+  background: linear-gradient(180deg, #121213 0%, #0f0f10 100%);
+}
+.pv-mark {
+  height: 6px;
+  background: linear-gradient(90deg, var(--pv-amber), var(--pv-copper));
+  margin-bottom: 10px;
+}
+.pv-title {
+  font-family: "Times New Roman", Georgia, "Bookman Old Style", serif;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: var(--pv-text);
+}
+.pv-sub {
+  color: var(--pv-amber);
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.pv-main { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; padding: 20px; }
+.pv-card { background: var(--pv-iron); border: 1px solid #2a2a2d; border-top: 3px solid var(--pv-amber); padding: 16px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+.pv-card h2 { margin: 0 0 12px; font-family: "Times New Roman", Georgia, serif; color: var(--pv-amber); letter-spacing: 0.06em; }
+
+.pv-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.pv-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: #151517; border: 1px solid #2a2a2d; border-radius: 6px; }
+
+.pv-btn { background: var(--pv-amber); color: #0b0b0c; border: none; padding: 6px 10px; border-radius: 4px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; }
+.pv-btn:hover { background: #da8b36; }
+
+.pv-badge { padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.03em; }
+.pv-ok { background: var(--pv-green); color: #0b0b0c; }
+.pv-warning { background: var(--pv-amber); color: #0b0b0c; }
+.pv-offline { background: #555; color: #111; }
+
+.pv-timeline { grid-column: span 1; }
+.pv-tl { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.pv-tl li { background: #151517; border: 1px dashed var(--pv-copper); padding: 8px; border-radius: 4px; color: var(--pv-text); }
+.pv-tl code { color: var(--pv-amber); }
+
+.pv-footer { margin-top: auto; text-align: center; padding: 12px; color: #a79e90; border-top: 1px solid #2a2a2d; }
