@@ -17,7 +17,9 @@ from app.modules.pipelineguard import register_pipelineguard
 from app.modules.flowiq import register_flowiq
 from app.modules.rigsight import register_rigsight
 from app.modules.incidents import register_incidents
+from app.modules.intelligence import register_intelligence
 from app.modules.stubs import register_missions, register_ros2_bridge
+from app.integrations.summit import init_summit, shutdown_summit, SummitConfig
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,6 +33,14 @@ async def lifespan(app: FastAPI):
     # Startup
     await init_db()
     await register_events(app)
+
+    # Optional Summit client
+    if settings.summit_enabled:
+        init_summit(SummitConfig(
+            mqtt_url=settings.summit_mqtt_url,
+            api_key=settings.summit_api_key,
+            org_id=settings.summit_org_id,
+        ))
     
     # Register modules
     register_valveops(app)
@@ -38,15 +48,14 @@ async def lifespan(app: FastAPI):
     register_flowiq(app)
     register_rigsight(app)
     register_incidents(app)
+    register_intelligence(app)
     register_missions(app)
     register_ros2_bridge(app)
-    
-    logger.info("Plainview API Service started on port %d", settings.port)
-    
     yield
     
     # Shutdown
     logger.info("Shutting down Plainview API Service")
+    shutdown_summit()
     await close_db()
 
 

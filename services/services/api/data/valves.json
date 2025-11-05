@@ -3,15 +3,15 @@
     "actuations": [
       {
         "valve_id": "v-101",
-        "requested_at": "2025-11-05T08:07:56.702332",
-        "torque_nm": 50.95181972435773,
-        "completed_at": "2025-11-05T08:07:57.890381",
+        "requested_at": "2025-11-05T08:20:57.912419",
+        "torque_nm": 51.75417610612029,
+        "completed_at": "2025-11-05T08:20:59.193616",
         "success": true,
-        "duration": 1327
+        "duration": 1207
       }
     ],
-    "lastTorqueNm": 50.95181972435773,
-    "lastActuationTime": "2025-11-05T08:07:57.890381",
+    "lastTorqueNm": 51.75417610612029,
+    "lastActuationTime": "2025-11-05T08:20:59.193616",
     "updatedAt": 1762330077890
   }
 }

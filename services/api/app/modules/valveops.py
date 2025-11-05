@@ -151,9 +151,7 @@ async def get_valve(valve_id: str):
     }
 
 
-@router.post("/{valve_id}/actuate")
-async def actuate_valve(valve_id: str):
-    """POST /valves/:id/actuate - actuate valve with telemetry."""
+async def start_actuation(valve_id: str) -> dict:
     valve = next((v for v in VALVE_INVENTORY if v["id"] == valve_id), None)
     if not valve:
         raise HTTPException(status_code=404, detail="Valve not found")
@@ -167,7 +165,6 @@ async def actuate_valve(valve_id: str):
         "requested_at": int(datetime.utcnow().timestamp() * 1000),
     })
 
-    # Simulate actuation async
     async def complete_actuation():
         await asyncio.sleep(1 + random.random() * 0.4)
         base_torque = 50
@@ -175,7 +172,6 @@ async def actuate_valve(valve_id: str):
         completed_at = datetime.utcnow().isoformat()
         duration = int(800 + random.random() * 600)
 
-        # Persist state
         store.upsert_valve(valve_id, {
             "last_torque_nm": torque,
             "last_actuation_time": completed_at,
@@ -188,17 +184,32 @@ async def actuate_valve(valve_id: str):
                 "duration": duration,
             }],
         })
+
         await event_bus.emit({
             "type": "valve.actuation.completed",
             "valve_id": valve_id,
             "torque_nm": torque,
             "completed_at": int(datetime.utcnow().timestamp() * 1000),
         })
+        try:
+            from app.integrations.summit import summit_client
+            if summit_client:
+                summit_client.publish_valve_status(valve_id, {
+                    "state": "DONE",
+                    "torque_nm": torque,
+                    "completed_at": datetime.utcnow().isoformat(),
+                })
+        except Exception:
+            pass
 
     asyncio.create_task(complete_actuation())
-
     return {"ok": True, "actuation_id": actuation_id}
 
+
+@router.post("/{valve_id}/actuate")
+async def actuate_valve(valve_id: str):
+    """POST /valves/:id/actuate - actuate valve with telemetry."""
+    return await start_actuation(valve_id)
 
 @router.get("/{valve_id}/health")
 async def get_valve_health(valve_id: str):

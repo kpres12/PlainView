@@ -43,7 +43,7 @@ def start_monitoring():
         while True:
             leak = generate_simulated_leak()
             if leak:
-                leaks_history.append(leak)
+                leaks_history.append(leak);
                 if len(leaks_history) > 100:
                     leaks_history.pop(0)
                 
@@ -53,6 +53,27 @@ def start_monitoring():
                     "message": f"{leak['severity'].upper()} leak in {leak['location']['section']}. Volume: {leak['volume_estimate']:.1f}L",
                     "timestamp": datetime.utcnow().isoformat(),
                 })
+
+                # Publish to Summit via MQTT if available
+                try:
+                    from app.integrations.summit import summit_client
+                    if summit_client:
+                        payload = {
+                            "id": leak.get("id"),
+                            "ts": datetime.utcnow().timestamp(),
+                            "source": "plainview",
+                            "asset_id": leak.get("location", {}).get("section"),
+                            "location": {
+                                "lat": leak.get("location", {}).get("latitude"),
+                                "lon": leak.get("location", {}).get("longitude"),
+                            },
+                            "class": "UNKNOWN",
+                            "confidence": 0.8,
+                            "severity": leak.get("severity", "minor").upper(),
+                        }
+                        summit_client.publish_leak(payload)
+                except Exception:
+                    pass
             
             await asyncio.sleep(10)
     
