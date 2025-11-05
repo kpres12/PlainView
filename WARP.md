@@ -8,16 +8,16 @@ Common commands
   - Build: `npm run build`
   - Test: `npm run test`
 - Per workspace:
-  - API: `npm run dev -w @plainview/api` | build `npm run build -w @plainview/api` | test `npm run test -w @plainview/api`
+  - API (Python/FastAPI): `npm run dev -w @plainview/api` | start `npm run start -w @plainview/api`
   - Dashboard: `npm run dev -w @plainview/dashboard` | build `npm run build -w @plainview/dashboard`
   - Shared types: `npm run build -w @plainview/shared`
 
 How to run a single test
-- Vitest is used. Example (API): `npm run test -w @plainview/api -- -t "MODULES"`
+- API uses Python now. Tests TBD (pytest recommended). Dashboard still uses Vitest.
 
 Architecture (current snapshot)
 - Monorepo (npm workspaces): `apps/` (dashboard), `services/` (API), `packages/` (shared types), `integrations/` (reserved for connectors).
-- API Service (`services/api`, Fastify + TS): exposes `/health`, `/modules`, root info; composes domain modules as handlers as they land.
+- API Service (`services/api`, FastAPI + Python): exposes `/health`, `/modules`, `/events`, and composes domain modules (ValveOps, PipelineGuard, FlowIQ, RigSight, Incidents, stubs for Missions/ROS2).
 - Dashboard (`apps/dashboard`, Vite + React + TS): vintage industrial theme; lists modules; ValveOps panel; SSE timeline from `/events`.
 - Shared Types (`packages/shared`): cross-package contracts for modules, health, descriptors (expand as needed).
 
@@ -42,7 +42,7 @@ Roadmap (concise)
 
 Implementation notes
 - To develop:
-  - API dev: `npm run dev -w @plainview/api` (CORS enabled; port 4000)
+  - API dev: `npm run dev -w @plainview/api` (FastAPI + Uvicorn; CORS enabled; port 4000). First-time: `pip install -r services/api/requirements.txt`.
   - Dashboard dev: `npm run dev -w @plainview/dashboard` (port 5173)
 - Road to production: add auth, persistence (e.g., Postgres/SQLite), real telemetry (MQTT/OPC-UA/ROS2), and map/timeline data sources.
 - As components land, add: edge agents/firmware (ROS2), simulation (Gazebo/Webots), protocol integrations (Modbus/OPC-UA/MQTT/SCADA), and corresponding commands (dev/build/test).

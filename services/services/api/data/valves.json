@@ -1,0 +1,17 @@
+{
+  "v-101": {
+    "actuations": [
+      {
+        "valve_id": "v-101",
+        "requested_at": "2025-11-05T08:07:56.702332",
+        "torque_nm": 50.95181972435773,
+        "completed_at": "2025-11-05T08:07:57.890381",
+        "success": true,
+        "duration": 1327
+      }
+    ],
+    "lastTorqueNm": 50.95181972435773,
+    "lastActuationTime": "2025-11-05T08:07:57.890381",
+    "updatedAt": 1762330077890
+  }
+}
