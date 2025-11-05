@@ -16,7 +16,7 @@ type Incident = {
   meta?: Record<string, any>;
 };
 
-type ValvesState = Record<string, { lastTorqueNm?: number; updatedAt?: number }>;
+type ValvesState = Record<string, { lastTorqueNm?: number; lastActuationTime?: string; actuations?: any[]; updatedAt?: number }>
 
 function ensure() {
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });

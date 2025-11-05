@@ -9,7 +9,11 @@ export type PlainviewEvent =
   | { type: "anomaly.detected"; assetId: string; anomalyType: string; confidence: number; at: number }
   | { type: "mission.started"; missionId: string; missionName: string; at: number }
   | { type: "mission.completed"; missionId: string; duration: number; status: "success" | "failure"; at: number }
-  | { type: "device.status"; deviceId: string; status: "online" | "offline"; at: number };
+  | { type: "device.status"; deviceId: string; status: "online" | "offline"; at: number }
+  | { type: "ros2.telemetry"; nodeId: string; topic: string; data: any; at: number }
+  | { type: "ros2.node.discovered"; nodeId: string; nodeType: string; location?: { lat: number; lon: number }; at: number }
+  | { type: "ros2.node.offline"; nodeId: string; at: number }
+  | { type: "flow.metrics.updated"; metrics: any }; // ROS2 flow data ingestion
 
 export const bus = new EventEmitter();
 
