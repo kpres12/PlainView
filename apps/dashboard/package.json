@@ -11,7 +11,7 @@
     "typecheck": "tsc -p . --noEmit"
   },
   "dependencies": {
-    "@react-three/drei": "^9.110.0",
+    "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^8.14.5",
     "framer-motion": "^10.16.16",
     "lucide-react": "^0.263.1",
