@@ -3,9 +3,11 @@ import random
 import uuid as uuid_module
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.models import ValveStatus, ValveHealthReport
 from app.database import valve_actuations
@@ -207,21 +209,37 @@ async def start_actuation(valve_id: str) -> dict:
 
 
 @router.post("/{valve_id}/actuate")
-async def actuate_valve(valve_id: str):
-    """POST /valves/:id/actuate - actuate valve with telemetry."""
+async def actuate_valve(request: Request, valve_id: str, api_key: str = Depends(lambda: None)):
+    """POST /valves/:id/actuate - actuate valve with telemetry.
+    
+    Protected endpoint - requires X-API-Key header when API_KEY_ENABLED=true.
+    Rate limited to 10 requests per minute per IP.
+    """
+    # Rate limit (10 per minute)
+    from app.rate_limit import limiter, VALVE_ACTUATION_LIMIT
+    await limiter.check(request, VALVE_ACTUATION_LIMIT)
+    
+    # Auth check
+    from app.auth import verify_api_key
+    from app.config import settings
+    
+    if settings.api_key_enabled:
+        await verify_api_key(api_key)
+    
     return await start_actuation(valve_id)
 
 @router.get("/{valve_id}/health")
 async def get_valve_health(valve_id: str):
     """GET /valves/:id/health - detailed health report."""
-    if not valve_state:
-        init_valve_state()
-
     valve = next((v for v in VALVE_INVENTORY if v["id"] == valve_id), None)
     if not valve:
         raise HTTPException(status_code=404, detail="Valve not found")
 
-    stored = valve_state.get(valve_id, {})
+    # Load persisted state
+    from app import store
+    stored_all = store.get_valves()
+    stored = stored_all.get(valve_id, {})
+
     updated = {
         **valve,
         "last_torque_nm": stored.get("last_torque_nm", valve.get("last_torque_nm")),

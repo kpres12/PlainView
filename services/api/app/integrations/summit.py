@@ -1,6 +1,7 @@
 import json
 import threading
 import time
+import logging
 from dataclasses import dataclass
 from typing import Optional, Callable
 from urllib.parse import urlparse
@@ -8,6 +9,8 @@ from urllib.parse import urlparse
 import paho.mqtt.client as mqtt
 
 from app.events import event_bus
+
+logger = logging.getLogger("plainview.summit")
 
 
 @dataclass
@@ -23,42 +26,65 @@ class SummitClient:
         self.client = None  # type: Optional[mqtt.Client]
         self._connected = threading.Event()
         self._thread_started = False
+        self._reconnect_attempts = 0
+        self._max_reconnect_delay = 60  # Max 60 seconds between retries
+        self._should_reconnect = True
 
     def connect(self):
+        """Connect to MQTT broker with exponential backoff retry."""
         parsed = urlparse(self.cfg.mqtt_url)
         host = parsed.hostname or "localhost"
         port = parsed.port or (443 if parsed.scheme == "wss" else 1883)
         transport = "websockets" if parsed.scheme in ("ws", "wss") else "tcp"
 
-        self.client = mqtt.Client(transport=transport)
-        # Use API key as password if provided
-        if self.cfg.api_key:
-            self.client.username_pw_set(username="plainview", password=self.cfg.api_key)
-        # Attach callbacks
-        self.client.on_connect = self._on_connect
-        self.client.on_message = self._on_message
-        self.client.on_disconnect = self._on_disconnect
-
-        # Set headers for org id via user properties if needed (MQTT v5) - skipped for simplicity
-        # Connect
-        self.client.connect(host, port, keepalive=60)
-        self.client.loop_start()
-        self._thread_started = True
-        # Wait briefly for connection
-        self._connected.wait(timeout=3.0)
-        # Subscribe to mission updates
         try:
-            self.client.subscribe("missions/updates", qos=1)
-        except Exception:
-            pass
+            self.client = mqtt.Client(transport=transport)
+            # Use API key as password if provided
+            if self.cfg.api_key:
+                self.client.username_pw_set(username="plainview", password=self.cfg.api_key)
+            
+            # Attach callbacks
+            self.client.on_connect = self._on_connect
+            self.client.on_message = self._on_message
+            self.client.on_disconnect = self._on_disconnect
+
+            # Enable automatic reconnection
+            self.client.reconnect_delay_set(min_delay=1, max_delay=self._max_reconnect_delay)
+            
+            # Connect
+            logger.info(f"Connecting to MQTT broker at {host}:{port}")
+            self.client.connect(host, port, keepalive=60)
+            self.client.loop_start()
+            self._thread_started = True
+            
+            # Wait briefly for connection
+            if self._connected.wait(timeout=5.0):
+                logger.info("MQTT connection established")
+                self._reconnect_attempts = 0
+                
+                # Subscribe to mission updates
+                try:
+                    self.client.subscribe("missions/updates", qos=1)
+                    logger.info("Subscribed to missions/updates")
+                except Exception as e:
+                    logger.warning(f"Failed to subscribe: {e}")
+            else:
+                logger.warning("MQTT connection timeout - will retry in background")
+                
+        except Exception as e:
+            logger.error(f"Failed to connect to MQTT broker: {e}")
+            self._schedule_reconnect()
 
     def disconnect(self):
+        """Gracefully disconnect from MQTT broker."""
+        self._should_reconnect = False
         try:
             if self.client and self._thread_started:
+                logger.info("Disconnecting from MQTT broker")
                 self.client.loop_stop()
                 self.client.disconnect()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error during MQTT disconnect: {e}")
 
     # ---- Publishing helpers ----
 
@@ -84,10 +110,32 @@ class SummitClient:
     # ---- Callbacks ----
 
     def _on_connect(self, _client, _userdata, _flags, rc, *args, **kwargs):
-        self._connected.set()
+        """Callback when connected to MQTT broker."""
+        if rc == 0:
+            logger.info("MQTT connected successfully")
+            self._connected.set()
+            self._reconnect_attempts = 0
+            
+            # Resubscribe to topics after reconnection
+            try:
+                self.client.subscribe("missions/updates", qos=1)
+                self.client.subscribe("valves/+/command", qos=1)
+            except Exception as e:
+                logger.warning(f"Failed to resubscribe: {e}")
+        else:
+            logger.error(f"MQTT connection failed with code {rc}")
+            self._schedule_reconnect()
 
-    def _on_disconnect(self, *_):
+    def _on_disconnect(self, _client, _userdata, rc, *args, **kwargs):
+        """Callback when disconnected from MQTT broker."""
         self._connected.clear()
+        
+        if rc != 0:
+            logger.warning(f"MQTT disconnected unexpectedly (code {rc})")
+            if self._should_reconnect:
+                self._schedule_reconnect()
+        else:
+            logger.info("MQTT disconnected gracefully")
 
     def _on_message(self, _client, _userdata, msg: mqtt.MQTTMessage):
         try:
@@ -125,6 +173,29 @@ class SummitClient:
                     pass
         except Exception:
             pass
+    
+    def _schedule_reconnect(self):
+        """Schedule reconnection with exponential backoff."""
+        if not self._should_reconnect:
+            return
+        
+        self._reconnect_attempts += 1
+        # Exponential backoff: 2^n seconds, capped at max_reconnect_delay
+        delay = min(2 ** self._reconnect_attempts, self._max_reconnect_delay)
+        
+        logger.info(f"Scheduling MQTT reconnection in {delay}s (attempt {self._reconnect_attempts})")
+        
+        def reconnect():
+            time.sleep(delay)
+            if self._should_reconnect and not self._connected.is_set():
+                try:
+                    logger.info("Attempting MQTT reconnection...")
+                    self.connect()
+                except Exception as e:
+                    logger.error(f"Reconnection attempt failed: {e}")
+        
+        thread = threading.Thread(target=reconnect, daemon=True)
+        thread.start()
 
 
 # Singleton holder

@@ -3,7 +3,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "services" / "api" / "data"
+# Data directory relative to services/api (correct path)
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 FILES = {
     "incidents": DATA_DIR / "incidents.json",
     "valves": DATA_DIR / "valves.json",

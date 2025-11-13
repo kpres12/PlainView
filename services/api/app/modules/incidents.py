@@ -3,7 +3,7 @@ import uuid as uuid_module
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 
 from app.events import event_bus
 
@@ -114,7 +114,13 @@ async def get_incident(incident_id: str):
 
 
 @router.post("/{incident_id}/update")
-async def update_incident(incident_id: str, payload: Dict[str, Any]):
+async def update_incident(incident_id: str, payload: Dict[str, Any], api_key: str = Depends(lambda: None)):
+    # Protected endpoint
+    from app.auth import verify_api_key
+    from app.config import settings
+    if settings.api_key_enabled:
+        await verify_api_key(api_key)
+    
     inc = incidents.get(incident_id)
     if not inc:
         return {"error": "not_found"}

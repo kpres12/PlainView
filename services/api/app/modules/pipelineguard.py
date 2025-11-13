@@ -2,7 +2,7 @@ import asyncio
 import random
 import uuid as uuid_module
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from app.events import event_bus
 
 router = APIRouter(prefix="/pipeline", tags=["PipelineGuard"])
@@ -149,8 +149,16 @@ async def get_section(section: str):
 
 
 @router.post("/alerts/{leak_id}/resolve")
-async def resolve_leak(leak_id: str):
-    """POST /pipeline/alerts/:id/resolve - mark leak as resolved."""
+async def resolve_leak(leak_id: str, api_key: str = Depends(lambda: None)):
+    """POST /pipeline/alerts/:id/resolve - mark leak as resolved.
+    
+    Protected endpoint - requires X-API-Key header when API_KEY_ENABLED=true.
+    """
+    from app.auth import verify_api_key
+    from app.config import settings
+    if settings.api_key_enabled:
+        await verify_api_key(api_key)
+    
     leak = next((l for l in leaks_history if l["id"] == leak_id), None)
     if not leak:
         raise HTTPException(status_code=404, detail="Leak not found")

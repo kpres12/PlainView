@@ -10,6 +10,9 @@ from app.config import settings
 from app.database import init_db, close_db
 from app.events import register_events, event_bus
 from app.models import Health, ModuleDescriptor
+from app.rate_limit import setup_rate_limiting
+from app.logging_config import setup_logging, RequestLoggingMiddleware
+from app.error_handlers import setup_error_handlers
 
 # Import modules
 from app.modules.valveops import register_valveops
@@ -21,8 +24,9 @@ from app.modules.intelligence import register_intelligence
 from app.modules.stubs import register_missions, register_ros2_bridge
 from app.integrations.summit import init_summit, shutdown_summit, SummitConfig
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Configure logging
+setup_logging(json_logging=settings.json_logging, log_level=settings.log_level)
+logger = logging.getLogger("plainview.main")
 
 # App lifespan
 @asynccontextmanager
@@ -76,6 +80,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add rate limiting
+setup_rate_limiting(app)
+
+# Add request logging middleware
+app.add_middleware(RequestLoggingMiddleware)
+
+# Add error handlers
+setup_error_handlers(app)
+
 # Module registry
 MODULES = [
     ModuleDescriptor(key="valve-ops", title="ValveOps", description="Autonomous actuation & maintenance scheduling"),
@@ -92,10 +105,59 @@ startup_time = datetime.utcnow()
 
 @app.get("/health")
 async def health():
-    """Health check endpoint."""
+    """Health check endpoint with subsystem checks.
+    
+    Returns:
+        - status: "ok" | "degraded" | "down"
+        - checks: dict of subsystem statuses
+        - uptime_sec: server uptime in seconds
+    """
+    from sqlalchemy import text
+    from app.database import AsyncSessionLocal
+    from app.integrations.summit import summit_client
+    
+    checks = {}
     uptime_sec = int((datetime.utcnow() - startup_time).total_seconds())
-    # Provide both snake_case and camelCase for compatibility
-    return {"status": "ok", "uptime_sec": uptime_sec, "uptimeSec": uptime_sec}
+    
+    # Database check
+    try:
+        if AsyncSessionLocal:
+            async with AsyncSessionLocal() as session:
+                await session.execute(text("SELECT 1"))
+            checks["database"] = "ok"
+        else:
+            checks["database"] = "not_initialized"
+    except Exception as e:
+        checks["database"] = f"error: {type(e).__name__}"
+    
+    # MQTT/Summit check
+    try:
+        if summit_client and summit_client._connected.is_set():
+            checks["mqtt"] = "ok"
+        elif summit_client:
+            checks["mqtt"] = "disconnected"
+        else:
+            checks["mqtt"] = "disabled"
+    except Exception:
+        checks["mqtt"] = "unknown"
+    
+    # Event bus check (always ok if server is running)
+    checks["event_bus"] = "ok"
+    
+    # Determine overall status
+    critical_checks = ["database"]
+    if any(checks.get(c) not in ["ok", "disabled"] for c in critical_checks):
+        status = "degraded"
+    else:
+        status = "ok"
+    
+    return {
+        "status": status,
+        "checks": checks,
+        "uptime_sec": uptime_sec,
+        "uptimeSec": uptime_sec,  # camelCase alias
+        "version": "0.0.1",
+    }
 
 
 @app.get("/modules")

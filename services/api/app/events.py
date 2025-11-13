@@ -12,6 +12,7 @@ EVENT_TYPES = {
     "anomaly.detected",
     "mission.started",
     "mission.completed",
+    "mission.updated",
     "device.status",
     "ros2.telemetry",
     "ros2.node.discovered",
@@ -19,6 +20,10 @@ EVENT_TYPES = {
     "flow.metrics.updated",
     "alert.created",
     "alert.acknowledged",
+    "detection.made",
+    "incident.created",
+    "incident.updated",
+    "intelligence.insight.received",
 }
 
 

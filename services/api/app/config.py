@@ -6,6 +6,10 @@ from typing import Optional
 class Settings(BaseSettings):
     """Application settings from environment variables."""
     
+    # Environment
+    environment: str = os.getenv("ENVIRONMENT", "development")
+    
+    # Database
     postgres_url: str = os.getenv(
         "POSTGRES_URL",
         "postgresql+asyncpg://plainview:plainview_password@localhost:5432/plainview"
@@ -22,8 +26,31 @@ class Settings(BaseSettings):
     summit_api_key: Optional[str] = os.getenv("SUMMIT_API_KEY")
     summit_org_id: Optional[str] = os.getenv("SUMMIT_ORG_ID")
     
-    # CORS
-    cors_origins: list = ["*"]  # Configure in production
+    # CORS - restrict in production
+    @property
+    def cors_origins(self) -> list[str]:
+        origins_str = os.getenv("CORS_ORIGINS", "")
+        if origins_str:
+            return [origin.strip() for origin in origins_str.split(",")]
+        # Default: allow localhost in dev, require explicit config in prod
+        if self.environment == "production":
+            return []  # Must be explicitly set
+        return ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"]
+    
+    # API Key Authentication
+    api_key_enabled: bool = os.getenv("API_KEY_ENABLED", "false").lower() == "true"
+    
+    @property
+    def api_keys(self) -> list[str]:
+        """Parse comma-separated API keys from environment."""
+        keys_str = os.getenv("API_KEYS", "")
+        if not keys_str:
+            return []
+        return [key.strip() for key in keys_str.split(",") if key.strip()]
+    
+    # Logging
+    log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    json_logging: bool = os.getenv("JSON_LOGGING", "false").lower() == "true"
     
     class Config:
         env_file = ".env"

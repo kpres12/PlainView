@@ -3,9 +3,9 @@ import json
 from pathlib import Path
 
 from app.events import event_bus
+from app.store import FILES
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "services" / "api" / "data"
-INC_PATH = DATA_DIR / "incidents.json"
+INC_PATH = FILES["incidents"]
 
 
 async def wait_until(predicate, timeout=2.0, interval=0.05):
@@ -19,7 +19,7 @@ async def wait_until(predicate, timeout=2.0, interval=0.05):
 
 async def test_incident_persist_create_and_update(client):
     # Backup and reset incidents.json
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    INC_PATH.parent.mkdir(parents=True, exist_ok=True)
     original = INC_PATH.read_text("utf-8") if INC_PATH.exists() else "[]"
     INC_PATH.write_text("[]", encoding="utf-8")
 
