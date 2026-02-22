@@ -12,6 +12,9 @@ from slowapi.util import get_remote_address
 from app.models import ValveStatus, ValveHealthReport
 from app.database import valve_actuations
 from app.events import event_bus
+from app.auth import require_write_access
+from app.simulation.engine import sim_engine
+from app.metrics import valve_actuations_total, valve_actuation_duration_seconds
 
 router = APIRouter(prefix="/valves", tags=["ValveOps"])
 
@@ -111,8 +114,13 @@ async def list_valves():
             "last_actuation_time": stored.get("last_actuation_time"),
         }
 
-        # Simulate temperature/pressure drift
-        if random.random() < 0.3:
+        # Use simulation engine for coherent temperature/pressure
+        if sim_engine._running:
+            base_temp = updated.get("temperature", 50) or 50
+            updated["temperature"] = sim_engine.get_valve_temperature(base_temp)
+            base_press = updated.get("pressure_pa", 2500000) or 2500000
+            updated["pressure_pa"] = sim_engine.get_valve_pressure(base_press)
+        elif random.random() < 0.3:
             updated["temperature"] = (updated.get("temperature", 50) or 50) + (random.random() - 0.5) * 2
 
         updated = update_valve_health(updated)
@@ -187,6 +195,10 @@ async def start_actuation(valve_id: str) -> dict:
             }],
         })
 
+        # Record metrics
+        valve_actuations_total.labels(valve_id=valve_id, success="true").inc()
+        valve_actuation_duration_seconds.labels(valve_id=valve_id).observe(duration / 1000.0)
+
         await event_bus.emit({
             "type": "valve.actuation.completed",
             "valve_id": valve_id,
@@ -209,23 +221,16 @@ async def start_actuation(valve_id: str) -> dict:
 
 
 @router.post("/{valve_id}/actuate")
-async def actuate_valve(request: Request, valve_id: str, api_key: str = Depends(lambda: None)):
+async def actuate_valve(
+    request: Request,
+    valve_id: str,
+    _user: dict = Depends(require_write_access),
+):
     """POST /valves/:id/actuate - actuate valve with telemetry.
-    
-    Protected endpoint - requires X-API-Key header when API_KEY_ENABLED=true.
-    Rate limited to 10 requests per minute per IP.
+
+    Protected endpoint - auth mode controlled by AUTH_MODE env var.
+    Rate limited via global slowapi limiter.
     """
-    # Rate limit (10 per minute)
-    from app.rate_limit import limiter, VALVE_ACTUATION_LIMIT
-    await limiter.check(request, VALVE_ACTUATION_LIMIT)
-    
-    # Auth check
-    from app.auth import verify_api_key
-    from app.config import settings
-    
-    if settings.api_key_enabled:
-        await verify_api_key(api_key)
-    
     return await start_actuation(valve_id)
 
 @router.get("/{valve_id}/health")

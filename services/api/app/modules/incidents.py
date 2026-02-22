@@ -6,6 +6,8 @@ from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Request, Depends
 
 from app.events import event_bus
+from app.auth import require_write_access
+from app.metrics import incidents_created_total, active_incidents as active_incidents_gauge
 
 router = APIRouter(prefix="/incidents", tags=["Incidents"])
 
@@ -73,6 +75,10 @@ async def on_alert_created(event: Dict[str, Any]):
     # Persist
     store.upsert_incident(incident)
 
+    # Record metrics
+    incidents_created_total.labels(severity=incident["severity"]).inc()
+    active_incidents_gauge.set(len([i for i in incidents.values() if i.get("status") == "active"]))
+
     await event_bus.emit({
         "type": "incident.created",
         "incidentId": inc_id,
@@ -114,13 +120,12 @@ async def get_incident(incident_id: str):
 
 
 @router.post("/{incident_id}/update")
-async def update_incident(incident_id: str, payload: Dict[str, Any], api_key: str = Depends(lambda: None)):
-    # Protected endpoint
-    from app.auth import verify_api_key
-    from app.config import settings
-    if settings.api_key_enabled:
-        await verify_api_key(api_key)
-    
+async def update_incident(
+    incident_id: str,
+    payload: Dict[str, Any],
+    _user: dict = Depends(require_write_access),
+):
+    """Update incident status. Protected endpoint."""
     inc = incidents.get(incident_id)
     if not inc:
         return {"error": "not_found"}

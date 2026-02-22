@@ -1,0 +1,20 @@
+[
+  {
+    "username": "admin",
+    "hashed_password": "$2b$12$LJ3m4ys3Lk0TSwMCfVCBaOGNJFGj0U8B0JY5qUVQjSBqN3lXhCmXe",
+    "role": "admin",
+    "display_name": "System Administrator"
+  },
+  {
+    "username": "operator",
+    "hashed_password": "$2b$12$LJ3m4ys3Lk0TSwMCfVCBaOGNJFGj0U8B0JY5qUVQjSBqN3lXhCmXe",
+    "role": "operator",
+    "display_name": "Field Operator"
+  },
+  {
+    "username": "viewer",
+    "hashed_password": "$2b$12$LJ3m4ys3Lk0TSwMCfVCBaOGNJFGj0U8B0JY5qUVQjSBqN3lXhCmXe",
+    "role": "viewer",
+    "display_name": "Dashboard Viewer"
+  }
+]

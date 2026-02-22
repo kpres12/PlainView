@@ -4,6 +4,8 @@ import uuid as uuid_module
 from datetime import datetime
 from fastapi import APIRouter
 from app.events import event_bus
+from app.simulation.engine import sim_engine
+from app.metrics import anomalies_detected_total, flow_health_score as flow_health_gauge
 
 router = APIRouter(prefix="/flow", tags=["FlowIQ"])
 
@@ -80,18 +82,21 @@ def start_collection():
         
         while True:
             if not ros2_active:
-                noise = {
-                    "flow": (random.random() - 0.5) * 10,
-                    "pressure": (random.random() - 0.5) * 50000,
-                    "temp": (random.random() - 0.5) * 3,
-                }
-                
-                current = {
-                    "flow_rate_lpm": max(100, BASELINE_METRICS["flow_rate_lpm"] + noise["flow"]),
-                    "pressure_pa": max(2300000, BASELINE_METRICS["pressure_pa"] + noise["pressure"]),
-                    "temperature_c": max(20, BASELINE_METRICS["temperature_c"] + noise["temp"]),
-                    "timestamp": datetime.utcnow().isoformat(),
-                }
+                # Use simulation engine for coherent metrics when available
+                if sim_engine._running:
+                    current = sim_engine.get_flow_metrics(BASELINE_METRICS)
+                else:
+                    noise = {
+                        "flow": (random.random() - 0.5) * 10,
+                        "pressure": (random.random() - 0.5) * 50000,
+                        "temp": (random.random() - 0.5) * 3,
+                    }
+                    current = {
+                        "flow_rate_lpm": max(100, BASELINE_METRICS["flow_rate_lpm"] + noise["flow"]),
+                        "pressure_pa": max(2300000, BASELINE_METRICS["pressure_pa"] + noise["pressure"]),
+                        "temperature_c": max(20, BASELINE_METRICS["temperature_c"] + noise["temp"]),
+                        "timestamp": datetime.utcnow().isoformat(),
+                    }
                 
                 metrics_history.append(current)
                 if len(metrics_history) > 100:
@@ -100,6 +105,7 @@ def start_collection():
                 anomalies = detect_anomalies(current)
                 for anom in anomalies:
                     anomaly_history.append(anom)
+                    anomalies_detected_total.labels(type=anom["type"], severity=anom["severity"]).inc()
                     asyncio.create_task(event_bus.emit({
                         "type": "anomaly.detected",
                         "asset_id": "flow-system",

@@ -4,6 +4,9 @@ import uuid as uuid_module
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends
 from app.events import event_bus
+from app.auth import require_write_access
+from app.simulation.engine import sim_engine
+from app.metrics import leak_detections_total, active_leaks
 
 router = APIRouter(prefix="/pipeline", tags=["PipelineGuard"])
 
@@ -12,13 +15,23 @@ leaks_history = []
 
 
 def generate_simulated_leak():
-    """Generate a simulated leak with 10% probability."""
-    if random.random() > 0.1:
-        return None
-    
+    """Generate a simulated leak using the simulation engine for coherent probability."""
+    if sim_engine._running:
+        if not sim_engine.should_generate_leak():
+            return None
+    else:
+        if random.random() > 0.1:
+            return None
+
     section = random.choice(PIPELINE_SECTIONS)
-    severity = random.choice(["minor", "major", "critical"])
-    
+    # Volume driven by operational load
+    load = sim_engine.state.operational_load if sim_engine._running else 0.7
+    base_volume = 10 + random.random() * 30
+    volume = base_volume * (1 + load * 3)  # higher load → bigger leaks
+
+    from app.simulation.profiles import severity_from_volume
+    severity = severity_from_volume(volume) if sim_engine._running else random.choice(["minor", "major", "critical"])
+
     return {
         "id": str(uuid_module.uuid4()),
         "severity": severity,
@@ -27,11 +40,7 @@ def generate_simulated_leak():
             "longitude": -120 + random.random() * 2,
             "section": section,
         },
-        "volume_estimate": (
-            500 + random.random() * 1000 if severity == "critical"
-            else 100 + random.random() * 200 if severity == "major"
-            else 10 + random.random() * 30
-        ),
+        "volume_estimate": round(volume, 1),
         "detected_at": datetime.utcnow().isoformat(),
         "status": "active",
     }
@@ -43,10 +52,14 @@ def start_monitoring():
         while True:
             leak = generate_simulated_leak()
             if leak:
-                leaks_history.append(leak);
+                leaks_history.append(leak)
                 if len(leaks_history) > 100:
                     leaks_history.pop(0)
-                
+
+                # Record metrics
+                leak_detections_total.labels(severity=leak["severity"]).inc()
+                active_leaks.set(len([l for l in leaks_history if l["status"] == "active"]))
+
                 await event_bus.emit({
                     "type": "alert.created",
                     "severity": "critical" if leak["severity"] == "critical" else "warning",
@@ -149,16 +162,14 @@ async def get_section(section: str):
 
 
 @router.post("/alerts/{leak_id}/resolve")
-async def resolve_leak(leak_id: str, api_key: str = Depends(lambda: None)):
+async def resolve_leak(
+    leak_id: str,
+    _user: dict = Depends(require_write_access),
+):
     """POST /pipeline/alerts/:id/resolve - mark leak as resolved.
-    
-    Protected endpoint - requires X-API-Key header when API_KEY_ENABLED=true.
+
+    Protected endpoint - auth mode controlled by AUTH_MODE env var.
     """
-    from app.auth import verify_api_key
-    from app.config import settings
-    if settings.api_key_enabled:
-        await verify_api_key(api_key)
-    
     leak = next((l for l in leaks_history if l["id"] == leak_id), None)
     if not leak:
         raise HTTPException(status_code=404, detail="Leak not found")

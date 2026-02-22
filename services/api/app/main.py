@@ -22,7 +22,15 @@ from app.modules.rigsight import register_rigsight
 from app.modules.incidents import register_incidents
 from app.modules.intelligence import register_intelligence
 from app.modules.stubs import register_missions, register_ros2_bridge
+from app.modules.auth_routes import register_auth_routes
 from app.integrations.summit import init_summit, shutdown_summit, SummitConfig
+from app.simulation.engine import sim_engine
+from app.simulation.routes import register_simulation
+from app.agents.registry import agent_registry
+from app.agents.simulated import create_default_fleet
+from app.agents.routes import register_agents
+from app.metrics import register_metrics
+from app.middleware.metrics import PrometheusMiddleware
 
 # Configure logging
 setup_logging(json_logging=settings.json_logging, log_level=settings.log_level)
@@ -55,10 +63,27 @@ async def lifespan(app: FastAPI):
     register_intelligence(app)
     register_missions(app)
     register_ros2_bridge(app)
+    register_auth_routes(app)
+    register_simulation(app)
+    register_agents(app)
+
+    if settings.metrics_enabled:
+        register_metrics(app)
+
+    # Start simulation engine and agents in simulation mode
+    if settings.simulation_mode:
+        sim_engine.start()
+        for agent in create_default_fleet():
+            agent_registry.register(agent)
+        await agent_registry.start_all()
+        logger.info("Simulation mode active — engine + %d agents started", len(agent_registry.list_agents()))
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Plainview API Service")
+    agent_registry.stop_all()
+    sim_engine.stop()
     shutdown_summit()
     await close_db()
 
@@ -85,6 +110,10 @@ setup_rate_limiting(app)
 
 # Add request logging middleware
 app.add_middleware(RequestLoggingMiddleware)
+
+# Add Prometheus metrics middleware
+if settings.metrics_enabled:
+    app.add_middleware(PrometheusMiddleware)
 
 # Add error handlers
 setup_error_handlers(app)

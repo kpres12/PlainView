@@ -48,10 +48,23 @@ class Settings(BaseSettings):
             return []
         return [key.strip() for key in keys_str.split(",") if key.strip()]
     
+    # Authentication mode: "none" | "api_key" | "jwt"
+    auth_mode: str = os.getenv("AUTH_MODE", "none")
+
+    # JWT settings
+    jwt_secret: str = os.getenv("JWT_SECRET", "plainview-dev-secret-change-me")
+    jwt_expiry_minutes: int = int(os.getenv("JWT_EXPIRY_MINUTES", "30"))
+
+    # Simulation
+    simulation_mode: bool = os.getenv("SIMULATION_MODE", "true").lower() == "true"
+
+    # Metrics
+    metrics_enabled: bool = os.getenv("METRICS_ENABLED", "true").lower() == "true"
+
     # Logging
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     json_logging: bool = os.getenv("JSON_LOGGING", "false").lower() == "true"
-    
+
     class Config:
         env_file = ".env"
         case_sensitive = False

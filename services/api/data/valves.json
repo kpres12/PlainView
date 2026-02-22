@@ -1,7 +1,18 @@
 {
   "v-101": {
-    "lastTorqueNm": 43,
-    "updatedAt": 1762310877492
+    "lastTorqueNm": 51.193166148972246,
+    "updatedAt": 1762310877492,
+    "actuations": [
+      {
+        "valve_id": "v-101",
+        "requested_at": "2026-02-22T18:35:15.495835",
+        "torque_nm": 51.193166148972246,
+        "completed_at": "2026-02-22T18:35:16.703677",
+        "success": true,
+        "duration": 1396
+      }
+    ],
+    "lastActuationTime": "2026-02-22T18:35:16.703677"
   },
   "v-102": {
     "lastTorqueNm": 46,

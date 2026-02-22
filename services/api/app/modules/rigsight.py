@@ -5,6 +5,8 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from typing import Optional
 from app.events import event_bus
+from app.simulation.engine import sim_engine
+from app.metrics import camera_detections_total, connected_cameras
 
 router = APIRouter(prefix="/rig", tags=["RigSight"])
 
@@ -59,7 +61,7 @@ def start_detection_simulation():
             camera = random.choice(CAMERAS)
             if camera.get("status") != "offline" and random.random() < 0.2:
                 detection_type = random.choice(["pressure_deviation", "corrosion", "leak_sign", "thermal_anomaly"])
-                confidence = 0.7 + random.random() * 0.3
+                confidence = sim_engine.get_detection_confidence() if sim_engine._running else (0.7 + random.random() * 0.3)
 
                 event = {
                     "id": str(uuid_module.uuid4()),
@@ -86,6 +88,7 @@ def start_detection_simulation():
                     if len(anomalies) > 3:
                         anomalies.pop(0)
 
+                camera_detections_total.labels(detection_type=detection_type).inc()
                 await event_bus.emit({
                     "type": "detection.made",
                     "sourceId": camera["id"],
@@ -94,8 +97,12 @@ def start_detection_simulation():
                     "timestamp": datetime.utcnow().isoformat(),
                 })
 
-            # Occasional degradation/restore
-            if random.random() < 0.05:
+            # Occasional degradation/restore (driven by sim engine weather)
+            if sim_engine._running:
+                if sim_engine.should_camera_degrade():
+                    random_camera = random.choice(CAMERAS)
+                    random_camera["status"] = "degraded" if random_camera["status"] == "online" else "online"
+            elif random.random() < 0.05:
                 random_camera = random.choice(CAMERAS)
                 random_camera["status"] = "degraded" if random_camera["status"] == "online" else "online"
 
